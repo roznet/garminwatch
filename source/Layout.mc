@@ -3,7 +3,8 @@ import Toybox.Lang;
 import Toybox.Math;
 
 // Resolution-independent geometry, computed once from the screen size.
-// Lengths are fractions of the dial radius, widths fractions of the screen size.
+// Lengths are fractions of the dial radius, widths and font sizes fractions of the screen size,
+// and centre positions fractions of screen width (x) or height (y).
 class Layout {
 
     const RING_RADIUS = 0.78;
@@ -25,6 +26,26 @@ class Layout {
 
     const HUB_RADIUS = 0.013;
 
+    // Ring slots span 1 o'clock to 11 o'clock, leaving 12 clear
+    const SLOT_FIRST_ANGLE = 30.0f;
+    const SLOT_LAST_ANGLE = 330.0f;
+    const SLOT_GAP = 0.012;
+    const RING_FONT_SIZE = 0.056;
+
+    const CENTRE_LEFT_X = 0.38;
+    const CENTRE_RIGHT_X = 0.62;
+    const CENTRE_LABEL_Y = 0.28;
+    const CENTRE_VALUE_Y = 0.35;
+    const CENTRE_LABEL_FONT_SIZE = 0.046;
+    const CENTRE_VALUE_FONT_SIZE = 0.062;
+    const DIVIDER_TOP = 0.24;
+    const DIVIDER_BOTTOM = 0.39;
+    const DIVIDER_WIDTH = 0.004;
+    const DATE_Y = 0.70;
+    const DATE_FONT_SIZE = 0.074;
+
+    const FONT_FACES = ["RobotoCondensedBold", "RobotoRegular"] as Array<String>;
+
     var cx as Float;
     var cy as Float;
     var radius as Float;
@@ -44,6 +65,24 @@ class Layout {
     var secondTipStart as Float;
     var secondPenWidth as Number;
     var hubRadius as Float;
+
+    // Clock angle in degrees (0 = 12 o'clock, clockwise) of each ring slot anchor
+    var ringAngles as Array<Float>;
+    var slotGap as Float;
+
+    var centreLeftX as Float;
+    var centreRightX as Float;
+    var centreLabelY as Float;
+    var centreValueY as Float;
+    var dividerTop as Float;
+    var dividerBottom as Float;
+    var dividerWidth as Number;
+    var dateY as Float;
+
+    var ringFont as VectorFont?;
+    var centreLabelFont as VectorFont?;
+    var centreValueFont as VectorFont?;
+    var dateFont as VectorFont?;
 
     function initialize(width as Number, height as Number) {
         var size = (width < height ? width : height).toFloat();
@@ -76,17 +115,45 @@ class Layout {
 
         secondLength = radius * SECOND_LENGTH;
         secondTipStart = radius * (SECOND_LENGTH - SECOND_TIP_LENGTH);
-        secondPenWidth = (size * SECOND_WIDTH + 0.5f).toNumber();
-        if (secondPenWidth < 2) {
-            secondPenWidth = 2;
+        secondPenWidth = atLeast((size * SECOND_WIDTH + 0.5f).toNumber(), 2);
+        hubRadius = size * HUB_RADIUS;
+
+        var count = Slots.RING.size();
+        ringAngles = new [count] as Array<Float>;
+        for (var i = 0; i < count; i++) {
+            ringAngles[i] = count > 1
+                ? SLOT_FIRST_ANGLE + (SLOT_LAST_ANGLE - SLOT_FIRST_ANGLE) * i / (count - 1)
+                : 180.0f;
         }
-        hubRadius = radius * HUB_RADIUS * 2;
+        slotGap = size * SLOT_GAP;
+
+        centreLeftX = width * CENTRE_LEFT_X;
+        centreRightX = width * CENTRE_RIGHT_X;
+        centreLabelY = height * CENTRE_LABEL_Y;
+        centreValueY = height * CENTRE_VALUE_Y;
+        dividerTop = height * DIVIDER_TOP;
+        dividerBottom = height * DIVIDER_BOTTOM;
+        dividerWidth = atLeast((size * DIVIDER_WIDTH + 0.5f).toNumber(), 1);
+        dateY = height * DATE_Y;
+
+        ringFont = vectorFont(size * RING_FONT_SIZE);
+        centreLabelFont = vectorFont(size * CENTRE_LABEL_FONT_SIZE);
+        centreValueFont = vectorFont(size * CENTRE_VALUE_FONT_SIZE);
+        dateFont = vectorFont(size * DATE_FONT_SIZE);
     }
 
     private function taperedHand(length as Float, baseWidth as Float, tipWidth as Float, grow as Float) as Array<Point2D> {
         var b = baseWidth / 2 + grow;
         var t = tipWidth / 2 + grow;
         return [[-b, grow], [-t, -length - grow], [t, -length - grow], [b, grow]] as Array<Point2D>;
+    }
+
+    private function vectorFont(pixels as Float) as VectorFont? {
+        return Graphics.getVectorFont({ :face => FONT_FACES, :size => (pixels + 0.5f).toNumber() });
+    }
+
+    private function atLeast(value as Number, minimum as Number) as Number {
+        return value < minimum ? minimum : value;
     }
 
 }

@@ -163,8 +163,13 @@ reinstall.
 Do **not** call `Position.getInfo()` on every update and do **not** request a
 GPS fix. Implementation:
 
-1. On init and on `onSettingsChanged`, read the cached last known position via
-   `Position.getInfo()` once. This returns the last known fix without waking GPS
+1. Read the last known position without waking GPS, trying in order
+   `Activity.getActivityInfo().currentLocation`, `Position.getInfo().position`,
+   then the synced weather's `observationLocationPosition`. All three return
+   null unless the manifest has the `Positioning` permission. Read on init and
+   again only when the daily recompute runs, so travel is picked up the next
+   day. Keep the last good position in `Storage` for a fresh boot indoors, and
+   retry at most every 10 minutes while no position has ever been available
 2. Compute sunrise and sunset locally using the NOAA solar position algorithm
    from latitude, longitude and date
 3. Cache both results plus the date they were computed for, in `Storage`
@@ -179,8 +184,9 @@ distinguishing which.
 
 ### 4.2 Complications
 
-Add `<uses-permission id="ComplicationSubscriber"/>` and
-`<uses-permission id="SensorHistory"/>` (pressure trend) to the manifest.
+Add `<uses-permission id="ComplicationSubscriber"/>`,
+`<uses-permission id="SensorHistory"/>` (pressure trend) and
+`<uses-permission id="Positioning"/>` (sun times, see 4.1) to the manifest.
 
 Lifecycle: call `Complications.subscribeToUpdates()` for each active slot in
 `onShow()`, and `Complications.unsubscribeFromAllUpdates()` in `onHide()`.
@@ -261,10 +267,17 @@ recreated. Two APIs look like they might help and do not:
 - `Complication.getIcon()` returns only icons published by third-party Connect
   IQ apps. Native complications return nothing
 
-Build one small monochrome PNG bitmap per data type: footprint, battery,
-mountain, barometer, heart, sun-up, sun-down, globe/UTC, flame, stairs, bell,
-phone, thermometer. White on transparent, roughly 22px tall at 454px width.
-Load all of them once at init.
+Draw one small monochrome SVG per data type (white on transparent, 24x24
+viewBox) in `resources/drawables/icons/`. The resource compiler rasterises them
+with `scaleRelativeTo="screen"` (5.5% of the screen, about 25px at 454px), so
+icon size follows the screen with no per-resolution assets. Load all of them
+once at init.
+
+Not every field has an icon: UTC shows a short text label (`UTC`) in the icon's
+place, and the date has neither. Phase 1 icons: thermometer, sunrise, sunset,
+heart, mountain, footsteps, battery, and one trend arrow rotated for rising,
+steady or falling pressure. Later fields add their own (flame, stairs, bell,
+phone).
 
 Why bitmaps rather than a custom bitmap font: ring icons must rotate to follow
 the arc. Custom font glyphs can only be drawn upright, and `drawRadialText()`

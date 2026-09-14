@@ -1,3 +1,15 @@
 <drawables xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
     <bitmap id="LauncherIcon" filename="launcher_icon.svg" dithering="none" />
+
+    <!-- Monochrome white icons, scaled with the screen so every resolution gets the same proportions.
+         automaticPalette="false" is required: drawBitmap2 with a transform or tint throws
+         "Source must not use a color palette" on paletted bitmaps. -->
+    <bitmap id="IconThermometer" filename="icons/thermometer.svg" scaleX="5.5%" scaleY="5.5%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
+    <bitmap id="IconSunrise" filename="icons/sunrise.svg" scaleX="5.5%" scaleY="5.5%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
+    <bitmap id="IconSunset" filename="icons/sunset.svg" scaleX="5.5%" scaleY="5.5%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
+    <bitmap id="IconHeart" filename="icons/heart.svg" scaleX="5.5%" scaleY="5.5%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
+    <bitmap id="IconMountain" filename="icons/mountain.svg" scaleX="5.5%" scaleY="5.5%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
+    <bitmap id="IconSteps" filename="icons/steps.svg" scaleX="5.5%" scaleY="5.5%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
+    <bitmap id="IconBattery" filename="icons/battery.svg" scaleX="5.5%" scaleY="5.5%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
+    <bitmap id="IconTrend" filename="icons/trend.svg" scaleX="5.5%" scaleY="5.5%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
 </drawables>
