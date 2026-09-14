@@ -1,0 +1,19 @@
+# Build output: compiled apps, debug symbols, simulator captures
+bin/
+*.prg
+*.iq
+*.prg.debug.xml
+*.mir
+
+# Signing keys never belong in the repo (the real one lives in ~/.garmin)
+*.der
+*.pem
+
+# Reference photos stay local
+*.jpg
+*.jpeg
+
+# Editor and OS files
+.DS_Store
+.vscode/
+.idea/
