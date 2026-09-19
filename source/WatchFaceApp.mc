@@ -15,7 +15,8 @@ class WatchFaceApp extends Application.AppBase {
     }
 
     function getInitialView() as [Views] or [Views, InputDelegates] {
-        return [ new WatchFaceView() ];
+        var view = new WatchFaceView();
+        return [ view, new InstrumentDelegate(view) ];
     }
 
     function onSettingsChanged() as Void {

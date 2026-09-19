@@ -5,6 +5,7 @@ import Toybox.Math;
 import Toybox.Position;
 import Toybox.System;
 import Toybox.Time;
+import Toybox.Time.Gregorian;
 import Toybox.Weather;
 
 // Sunrise and sunset from the last known position, using the standard sunrise equation
@@ -13,7 +14,11 @@ import Toybox.Weather;
 class SunCalc {
 
     const STORAGE_KEY = "sun";
-    const RETRY_MS = 600000;
+    // Re-read the last known position this often, and recompute when it has moved this far.
+    // 0.15 degrees is about 17 km, worth roughly 40 s of sun time. Without this, sun times stay
+    // wrong until the next day after travelling.
+    const POSITION_CHECK_MS = 900000;
+    const MOVE_THRESHOLD_DEG = 0.15;
 
     // Unix seconds, or null for polar day/night or no position yet
     var riseToday as Number? = null;
@@ -24,7 +29,7 @@ class SunCalc {
     private var mDay as Number = -1;
     private var mLat as Float? = null;
     private var mLon as Float? = null;
-    private var mLastAttempt as Number? = null;
+    private var mLastPositionCheck as Number? = null;
 
     function initialize() {
         var cached = Application.Storage.getValue(STORAGE_KEY);
@@ -38,24 +43,30 @@ class SunCalc {
         }
     }
 
-    function updateIfNewDay() as Void {
+    // Recompute when the day changes or the watch has moved far enough to matter
+    function update() as Void {
         var today = Time.today().value();
-        if (today == mDay) {
-            return;
-        }
-        // Without a position, retry every RETRY_MS rather than on every refresh
-        var timer = System.getTimer();
-        var lastAttempt = mLastAttempt;
-        if (lastAttempt != null && timer - lastAttempt < RETRY_MS) {
-            return;
-        }
-        mLastAttempt = timer;
+        var recompute = today != mDay;
 
-        var position = readPosition();
-        if (position != null) {
-            mLat = position[0];
-            mLon = position[1];
+        var timer = System.getTimer();
+        var lastCheck = mLastPositionCheck;
+        if (recompute || lastCheck == null || timer - lastCheck >= POSITION_CHECK_MS) {
+            mLastPositionCheck = timer;
+            var position = readPosition();
+            if (position != null) {
+                var lastLat = mLat;
+                var lastLon = mLon;
+                if (lastLat == null || lastLon == null || moved(lastLat, lastLon, position[0], position[1])) {
+                    recompute = true;
+                }
+                mLat = position[0];
+                mLon = position[1];
+            }
         }
+        if (!recompute) {
+            return;
+        }
+
         var lat = mLat;
         var lon = mLon;
         if (lat == null || lon == null) {
@@ -68,9 +79,24 @@ class SunCalc {
         setToday = todayTimes[1];
         riseTomorrow = tomorrowTimes[0];
         mDay = today;
-        mLastAttempt = null;
         Application.Storage.setValue(STORAGE_KEY, [mDay, riseToday, setToday, riseTomorrow, lat, lon]);
-        System.println("SunCalc: recomputed for day " + today + " at " + lat + "," + lon);
+        System.println("SunCalc: " + lat + "," + lon + " rise " + localTime(riseToday) + " set " + localTime(setToday));
+    }
+
+    // True when the two positions are more than MOVE_THRESHOLD_DEG apart, longitude scaled by
+    // latitude so the threshold is a real distance rather than degrees
+    private function moved(lat as Float, lon as Float, newLat as Float, newLon as Float) as Boolean {
+        var dLat = newLat - lat;
+        var dLon = (newLon - lon) * Math.cos(Math.toRadians(lat));
+        return dLat * dLat + dLon * dLon > MOVE_THRESHOLD_DEG * MOVE_THRESHOLD_DEG;
+    }
+
+    private function localTime(unixSeconds as Number?) as String {
+        if (unixSeconds == null) {
+            return "--";
+        }
+        var info = Gregorian.info(new Time.Moment(unixSeconds), Time.FORMAT_SHORT);
+        return info.hour.format("%02d") + ":" + info.min.format("%02d");
     }
 
     // Time of the next sun event after now; sets nextIsSunrise

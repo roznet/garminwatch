@@ -32,6 +32,9 @@ class Layout {
 
     const HUB_RADIUS = 0.013;
 
+    // Touch targets are far bigger than the drawn slot: 0.075 of the screen is a ~68px box at 454px
+    const TOUCH_RADIUS = 0.075;
+
     // Ring slots span 1 o'clock to 11 o'clock, leaving 12 clear
     const SLOT_FIRST_ANGLE = 30.0f;
     const SLOT_LAST_ANGLE = 330.0f;
@@ -81,6 +84,10 @@ class Layout {
     // Clock angle in degrees (0 = 12 o'clock, clockwise) of each ring slot anchor
     var ringAngles as Array<Float>;
     var slotGap as Float;
+
+    // Centre of each field's touch target, indexed by FieldId; null for fields with no slot
+    var slotCentres as Array<Point2D?>;
+    var touchRadius as Float;
 
     var centreLeftX as Float;
     var centreRightX as Float;
@@ -147,6 +154,17 @@ class Layout {
         dividerBottom = height * DIVIDER_BOTTOM;
         dividerWidth = atLeast((size * DIVIDER_WIDTH + 0.5f).toNumber(), 1);
         dateY = height * DATE_Y;
+
+        touchRadius = size * TOUCH_RADIUS;
+        slotCentres = new [FIELD_COUNT] as Array<Point2D?>;
+        for (var i = 0; i < count; i++) {
+            var theta = Math.toRadians(ringAngles[i]);
+            slotCentres[Slots.RING[i]] = [cx + ringRadius * Math.sin(theta), cy - ringRadius * Math.cos(theta)];
+        }
+        var centreRowY = (centreLabelY + centreValueY) / 2;
+        slotCentres[Slots.CENTRE_LEFT] = [centreLeftX, centreRowY];
+        slotCentres[Slots.CENTRE_RIGHT] = [centreRightX, centreRowY];
+        slotCentres[Slots.CENTRE_BOTTOM] = [cx, dateY];
 
         ringFont = vectorFont(size * RING_FONT_SIZE);
         centreLabelFont = vectorFont(size * CENTRE_LABEL_FONT_SIZE);

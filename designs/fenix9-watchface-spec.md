@@ -170,13 +170,17 @@ GPS fix. Implementation:
    `Activity.getActivityInfo().currentLocation`, `Position.getInfo().position`,
    then the synced weather's `observationLocationPosition`. All three return
    null unless the manifest has the `Positioning` permission. Read on init and
-   again only when the daily recompute runs, so travel is picked up the next
-   day. Keep the last good position in `Storage` for a fresh boot indoors, and
-   retry at most every 10 minutes while no position has ever been available
+   then every 15 minutes, which also covers the case where no position has ever
+   been available. Keep the last good position in `Storage` for a fresh boot
+   indoors
 2. Compute sunrise and sunset locally using the NOAA solar position algorithm
    from latitude, longitude and date
 3. Cache both results plus the date they were computed for, in `Storage`
-4. Recompute only when the cached date no longer matches today's date
+4. Recompute when the cached date no longer matches today's date, **or** when
+   the position has moved more than about 17 km (0.15 degrees, worth roughly
+   40 s of sun time). Recomputing on the date alone leaves the times wrong for
+   a whole day after travelling: verified on the watch, where times still
+   computed for the UK were 30 minutes out in Switzerland
 
 `Toybox.Weather.getSunrise()` is an alternative but depends on weather data
 being present and synced, which is unreliable. Prefer the local computation.
@@ -203,16 +207,23 @@ than assuming availability.
 Body Battery, sleep score, stress and similar derived metrics are **only**
 available this way; there is no direct read for them.
 
-### 4.3 Tap to open the native glance
+### 4.3 Press and hold to open the native glance
 
-Tapping a data slot should open the corresponding standard Garmin glance.
+Pressing and holding a data slot opens the corresponding standard Garmin
+glance. It is **not** a quick tap: on a watch face `onPress` is a touch and
+hold, and `onTap` only fires in the watch's own face edit mode.
 
 Implementation: a `WatchUi.WatchFaceDelegate` subclass overriding
 `onPress(event as WatchUi.ClickEvent)`. Read `event.getCoordinates()`, hit-test
 against the slot geometry computed in `Layout.mc`, and for a hit call
 `Complications.exitTo(new Complications.Id(<the slot's complication type>))`
-and return `true`. Return `false` on a miss so the system handles the tap
-normally.
+and return `true`. Return `false` on a miss so the system handles the press
+normally, and also when `exitTo` throws.
+
+`exitTo` does not require subscribing to the complication, so phase 1 keeps the
+direct reads of section 4 (route A) and still opens glances. Enumerate the
+watch's complications once at init with `getComplications()` and treat a slot
+whose type is missing as not pressable.
 
 Known limitations, to be verified on the real watch rather than assumed:
 
@@ -302,16 +313,32 @@ Implement in phases. Do not attempt phase 3 before phase 1 works on the watch.
 layout, fonts, hands and data reads working and installed on the device. This
 is the milestone that matters.
 
-**Phase 2:** Move slot assignments into `Properties`, configurable through the
-Garmin Connect phone app. Each of the nine slots becomes a settings enum
-choosing from the available field list.
+**Phase 2, slot choice from the phone (agreed as the next step after glances):**
+move slot assignments into `Properties`, configurable through the Garmin
+Connect phone app. Each of the nine slots becomes a settings enum choosing from
+the field list in `Slots.mc`.
 
-**Phase 3 (optional):** Adopt the Watch Face Configuration API
-(`Application.WatchFaceConfig`, API level 5.1.0 and above). Fenix 8 and newer
-have a native on-device watch face editor, and this API lets the face plug into
-it so slots can be reassigned on the watch itself using Garmin's own UI rather
-than through the phone. This is the nicer experience but is newer and more
-thinly documented, so it is explicitly last.
+- Work: `resources/settings/settings.xml` plus `properties.xml`, one enum per
+  slot, read in `initialize()` and `onSettingsChanged()` only (section 5), then
+  rebuild the slot arrays and the touch targets from the chosen fields
+- Small and low risk: the drawing code is already data-driven from the slot
+  arrays, and slot angles are already computed from the slot count
+- Limitation: editing happens in the phone app, not on the watch
+
+**Phase 3 (optional), the watch's own face editor:** adopt the Watch Face
+Configuration API (`Application.WatchFaceConfig`, API level 5.1.0 and above).
+Fenix 8 and newer have a native on-device watch face editor, and this API lets
+the face plug into it, so slots can be reassigned on the watch using Garmin's
+own UI, choosing any complication including ones published by third-party apps.
+
+- Reference: the SDK's `ConfigurableWatchFace` sample shows the wiring
+  (`WatchFaceDelegate.getComplicationDrawable`, `onTap` in edit mode,
+  `setSelectedComplication`, `onWatchFaceConfigEdited`)
+- Three things make it more work than phase 2: slots would render values
+  supplied by arbitrary complications rather than this face's own formatting;
+  native complications publish no icon (section 6), so each slot needs a text
+  fallback label; and the face must supply highlight drawables for the editor
+- Newer and more thinly documented, so it stays last and stays optional
 
 ## 8. Always-on fallback
 

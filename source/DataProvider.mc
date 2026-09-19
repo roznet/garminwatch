@@ -82,6 +82,11 @@ class DataProvider {
         }
     }
 
+    // Which sun event the slot is showing, so a press opens the matching glance
+    function isSunriseNext() as Boolean {
+        return mSun.nextIsSunrise;
+    }
+
     private function temperature(settings as System.DeviceSettings) as String {
         if (!mHasWeather) {
             return PLACEHOLDER;
@@ -96,7 +101,7 @@ class DataProvider {
     }
 
     private function sunEvent(now as Time.Moment, settings as System.DeviceSettings) as String {
-        mSun.updateIfNewDay();
+        mSun.update();
         var eventTime = mSun.nextEventTime(now.value());
         icons[FIELD_SUN_EVENT] = mSun.nextIsSunrise ? ICON_SUNRISE : ICON_SUNSET;
         if (eventTime == null) {

@@ -1,3 +1,4 @@
+import Toybox.Complications;
 import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.Math;
@@ -52,9 +53,15 @@ class WatchFaceView extends WatchUi.WatchFace {
     private var mHourBodyColors as Array<Number>;
     private var mMinuteBodyColors as Array<Number>;
 
+    // Complication types this watch publishes, so slots with no glance behind them stay inert
+    private var mHasComplications as Boolean;
+    private var mAvailableTypes as Dictionary<Number, Boolean>;
+
     function initialize() {
         WatchFace.initialize();
         mCanAntiAlias = Graphics.Dc has :setAntiAlias;
+        mHasComplications = Toybox has :Complications;
+        mAvailableTypes = {} as Dictionary<Number, Boolean>;
         mWakeTimer = System.getTimer();
         mData = new DataProvider();
         mIcons = new [ICON_COUNT] as Array<BitmapResource?>;
@@ -93,6 +100,64 @@ class WatchFaceView extends WatchUi.WatchFace {
         for (var i = 0; i < ids.size(); i++) {
             mIcons[i] = WatchUi.loadResource(ids[i]) as BitmapResource;
         }
+
+        findComplications();
+    }
+
+    // Record once which native complications exist on this watch, rather than assuming
+    private function findComplications() as Void {
+        if (!mHasComplications) {
+            return;
+        }
+        var iterator = Complications.getComplications();
+        var complication = iterator.next();
+        while (complication != null) {
+            var type = complication.getType();
+            if (type != null) {
+                mAvailableTypes.put(type, true);
+            }
+            complication = iterator.next();
+        }
+    }
+
+    // The complication to open for a press at (x, y), or null when the press misses every slot,
+    // the slot has no native complication (UTC), or this watch does not publish it
+    function complicationAt(x as Number, y as Number) as Complications.Id? {
+        var layout = mGeometry;
+        if (layout == null || !mHasComplications) {
+            return null;
+        }
+        var field = fieldAt(layout, x, y);
+        if (field == null) {
+            return null;
+        }
+        var type = Slots.complicationType(field, mData.isSunriseNext());
+        if (type == null || !mAvailableTypes.hasKey(type)) {
+            return null;
+        }
+        return new Complications.Id(type);
+    }
+
+    // Nearest slot within the touch radius, so overlapping targets resolve by distance
+    private function fieldAt(layout as Layout, x as Number, y as Number) as Number? {
+        var centres = layout.slotCentres;
+        var limit = layout.touchRadius * layout.touchRadius;
+        var best = null;
+        var bestDistance = limit;
+        for (var field = 0; field < centres.size(); field++) {
+            var centre = centres[field];
+            if (centre == null) {
+                continue;
+            }
+            var dx = x - centre[0];
+            var dy = y - centre[1];
+            var distance = dx * dx + dy * dy;
+            if (distance <= bestDistance) {
+                best = field;
+                bestDistance = distance;
+            }
+        }
+        return best;
     }
 
     function onShow() as Void {
