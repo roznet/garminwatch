@@ -151,7 +151,7 @@ each field as the fallback and for reference.
 | Temperature (wrist) | `Sensor.getInfo().temperature` | Wrist-heated, low value. Not used by default |
 | Notifications | `System.getDeviceSettings().notificationCount` | |
 | Phone connection | `System.getDeviceSettings().phoneConnected` | Icon only, no number |
-| Sunrise / sunset | Computed, see 4.1 | |
+| Sunrise / sunset | `COMPLICATION_TYPE_SUNRISE` / `_SUNSET`, computed fallback | Seconds since local midnight. See 4.1 |
 | Date | `Time.Gregorian.info()` | |
 | Floors climbed | `ActivityMonitor.getInfo().floorsClimbed` | |
 | Distance | `ActivityMonitor.getInfo().distance` | cm, convert |
@@ -163,8 +163,17 @@ reinstall.
 
 ### 4.1 Sunrise and sunset
 
-Do **not** call `Position.getInfo()` on every update and do **not** request a
-GPS fix. Implementation:
+**Prefer the watch's own values.** `COMPLICATION_TYPE_SUNRISE` and
+`COMPLICATION_TYPE_SUNSET` carry the same times the watch's sun glance shows,
+as seconds since local midnight, read with `getComplication()`. They are only
+today's times, so after sunset the next sunrise is tomorrow's, a minute or two
+out until the day rolls over. The local computation below stays as the fallback
+for when they return nothing, and keeps the slot working with no position. The
+two sources differ by a minute or two: the local formula is sea-level with
+fixed refraction, while the watch appears to correct for altitude.
+
+Fallback rules: do **not** call `Position.getInfo()` on every update and do
+**not** request a GPS fix. Implementation:
 
 1. Read the last known position without waking GPS, trying in order
    `Activity.getActivityInfo().currentLocation`, `Position.getInfo().position`,

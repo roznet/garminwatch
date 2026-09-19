@@ -9,6 +9,16 @@ module Colors {
     const TICK_ACCENT = 0xFF2020;
     const CENTRE_ACCENT = 0x22CCDD;
     const TEXT = 0xFFFFFF;
+    // Icon tints, muted so the white values stay the loudest thing on the dial.
+    // Colour costs nothing on AMOLED: a lit subpixel draws the power, and white lights all three.
+    const ICON_DEFAULT = 0xFFFFFF;
+    const ICON_THERMOMETER = 0xE08A3C;
+    const ICON_SUNRISE = 0xE8C33A;
+    const ICON_SUNSET = 0xD9702B;
+    const ICON_HEART = 0xE03A3A;
+    const ICON_MOUNTAIN = 0xA9764B;
+    const ICON_STEPS = 0x7FC46A;
+    const ICON_BATTERY = 0xBFC6CE;
     const DIVIDER = 0xAAAAAA;
     const HAND_RIM = 0xFFFFFF;
     // Sand-tinted hand bodies, fading from the hub (NEAR) to the tip (FAR); the hour hand is darker
@@ -28,6 +38,11 @@ class WatchFaceView extends WatchUi.WatchFace {
 
     const TEXT_CENTERED = Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER;
 
+    // Temperature icon colour scale, in Celsius
+    // A pale neutral stop at 10C keeps the blend from cyan to yellow out of green
+    const TEMPERATURE_STOPS = [-20, -5, 5, 10, 18, 25, 32, 40] as Array<Number>;
+    const TEMPERATURE_COLORS = [0x4472E8, 0x4FA8E0, 0x8FD3E8, 0xDCD8C8, 0xE3D46B, 0xE8A33A, 0xE0662B, 0xD93A2B] as Array<Number>;
+
     private var mGeometry as Layout?;
     private var mData as DataProvider;
     private var mCanAntiAlias as Boolean;
@@ -46,8 +61,10 @@ class WatchFaceView extends WatchUi.WatchFace {
     private var mMinuteBodyPts as Array<Array<Point2D>>;
     private var mTransform as AffineTransform;
     private var mMatrix as [Float, Float, Float, Float, Float, Float];
-    private var mIconOptions as { :transform as AffineTransform, :filterMode as FilterMode };
-    private var mTintedIconOptions as { :transform as AffineTransform, :filterMode as FilterMode, :tintColor as ColorType };
+    private var mIconOptions as { :transform as AffineTransform, :filterMode as FilterMode, :tintColor as ColorType };
+
+    // Tint per icon, indexed by IconId
+    private var mIconColors as Array<Number>;
 
     // One colour per body segment, hub to tip
     private var mHourBodyColors as Array<Number>;
@@ -75,8 +92,17 @@ class WatchFaceView extends WatchUi.WatchFace {
         mMinuteBodyColors = [] as Array<Number>;
         mTransform = new Graphics.AffineTransform();
         mMatrix = [1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f];
-        mIconOptions = { :transform => mTransform, :filterMode => Graphics.FILTER_MODE_BILINEAR };
-        mTintedIconOptions = { :transform => mTransform, :filterMode => Graphics.FILTER_MODE_BILINEAR, :tintColor => Colors.CENTRE_ACCENT };
+        mIconOptions = { :transform => mTransform, :filterMode => Graphics.FILTER_MODE_BILINEAR, :tintColor => Colors.ICON_DEFAULT };
+        mIconColors = [
+            Colors.ICON_THERMOMETER,
+            Colors.ICON_SUNRISE,
+            Colors.ICON_SUNSET,
+            Colors.ICON_HEART,
+            Colors.ICON_MOUNTAIN,
+            Colors.ICON_STEPS,
+            Colors.ICON_BATTERY,
+            Colors.CENTRE_ACCENT
+        ] as Array<Number>;
     }
 
     function onLayout(dc as Dc) as Void {
@@ -260,7 +286,7 @@ class WatchFaceView extends WatchUi.WatchFace {
         if (icon != null) {
             var theta = Math.toRadians(leadAngle);
             var rotation = clockwise ? theta : theta + Math.PI;
-            drawIcon(dc, icon, layout.cx + r * Math.sin(theta), layout.cy - r * Math.cos(theta), rotation.toFloat(), false);
+            drawIcon(dc, icon, layout.cx + r * Math.sin(theta), layout.cy - r * Math.cos(theta), rotation.toFloat(), iconColorFor(field));
         } else if (label != null) {
             dc.drawRadialText(layout.cx, layout.cy, font, label, TEXT_CENTERED, 90 - leadAngle, r, direction);
         }
@@ -289,7 +315,7 @@ class WatchFaceView extends WatchUi.WatchFace {
         var label = mData.labels[field];
         var labelFont = layout.centreLabelFont;
         if (icon != null) {
-            drawIcon(dc, icon, x, layout.centreLabelY, mData.iconRotations[field], true);
+            drawIcon(dc, icon, x, layout.centreLabelY, mData.iconRotations[field], iconColorFor(field));
         } else if (label != null && labelFont != null) {
             dc.setColor(Colors.CENTRE_ACCENT, Graphics.COLOR_TRANSPARENT);
             dc.drawText(x, layout.centreLabelY, labelFont, label, TEXT_CENTERED);
@@ -306,8 +332,42 @@ class WatchFaceView extends WatchUi.WatchFace {
         return id == ICON_NONE ? null : mIcons[id];
     }
 
-    // Draw a bitmap centred on (x, y), rotated clockwise by rotation radians
-    private function drawIcon(dc as Dc, icon as BitmapResource, x as Numeric, y as Numeric, rotation as Float, tinted as Boolean) as Void {
+    private function iconColorFor(field as Number) as Number {
+        if (field == FIELD_TEMPERATURE) {
+            var celsius = mData.temperatureCelsius;
+            if (celsius != null) {
+                return temperatureColor(celsius);
+            }
+        }
+        var id = mData.icons[field];
+        return id == ICON_NONE ? Colors.ICON_DEFAULT : mIconColors[id];
+    }
+
+    // Cold blue through to hot red, the ramp weather services use, without the green mid band
+    // (the steps icon is already green). Stops are Celsius whatever unit is displayed.
+    private function temperatureColor(celsius as Numeric) as Number {
+        var stops = TEMPERATURE_STOPS;
+        var colors = TEMPERATURE_COLORS;
+        var last = stops.size() - 1;
+        if (celsius <= stops[0]) {
+            return colors[0];
+        }
+        if (celsius >= stops[last]) {
+            return colors[last];
+        }
+        for (var i = 1; i <= last; i++) {
+            if (celsius <= stops[i]) {
+                var t = (celsius - stops[i - 1]).toFloat() / (stops[i] - stops[i - 1]);
+                return blendChannel(colors[i - 1], colors[i], 16, t)
+                    | blendChannel(colors[i - 1], colors[i], 8, t)
+                    | blendChannel(colors[i - 1], colors[i], 0, t);
+            }
+        }
+        return colors[last];
+    }
+
+    // Draw a bitmap centred on (x, y), rotated clockwise by rotation radians, in the given tint
+    private function drawIcon(dc as Dc, icon as BitmapResource, x as Numeric, y as Numeric, rotation as Float, tint as Number) as Void {
         var halfWidth = icon.getWidth() / 2.0f;
         var halfHeight = icon.getHeight() / 2.0f;
         var c = Math.cos(rotation).toFloat();
@@ -319,7 +379,8 @@ class WatchFaceView extends WatchUi.WatchFace {
         mMatrix[4] = c;
         mMatrix[5] = -(s * halfWidth + c * halfHeight);
         mTransform.setMatrix(mMatrix);
-        dc.drawBitmap2(x, y, icon, tinted ? mTintedIconOptions : mIconOptions);
+        mIconOptions[:tintColor] = tint;
+        dc.drawBitmap2(x, y, icon, mIconOptions);
     }
 
     // Black outline first so the hand stays legible over text, then the white rim shape,

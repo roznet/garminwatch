@@ -1,5 +1,6 @@
 import Toybox.Activity;
 import Toybox.ActivityMonitor;
+import Toybox.Complications;
 import Toybox.Lang;
 import Toybox.Math;
 import Toybox.SensorHistory;
@@ -25,6 +26,9 @@ class DataProvider {
     var labels as Array<String?>;
     var iconRotations as Array<Float>;
 
+    // Always Celsius whatever the display unit, so the icon colour scale has one input
+    var temperatureCelsius as Numeric? = null;
+
     private var mSun as SunCalc;
     private var mLastMinute as Number = -1;
     private var mLastRefresh as Number = 0;
@@ -33,12 +37,24 @@ class DataProvider {
     private var mHasHeartRateHistory as Boolean;
     private var mHasPressureHistory as Boolean;
     private var mHasWeather as Boolean;
+    private var mHasComplications as Boolean;
+
+    // The watch's own sun times, which match its glance exactly; SunCalc is the fallback
+    private var mSunriseId as Complications.Id?;
+    private var mSunsetId as Complications.Id?;
+    private var mSunriseNext as Boolean = true;
+    private var mLoggedSunSource as Boolean = false;
 
     function initialize() {
         mSun = new SunCalc();
         mHasHeartRateHistory = ActivityMonitor has :getHeartRateHistory;
         mHasPressureHistory = (Toybox has :SensorHistory) && (SensorHistory has :getPressureHistory);
         mHasWeather = Toybox has :Weather;
+        mHasComplications = Toybox has :Complications;
+        if (mHasComplications) {
+            mSunriseId = new Complications.Id(Complications.COMPLICATION_TYPE_SUNRISE);
+            mSunsetId = new Complications.Id(Complications.COMPLICATION_TYPE_SUNSET);
+        }
 
         values = new [FIELD_COUNT] as Array<String>;
         labels = new [FIELD_COUNT] as Array<String?>;
@@ -84,7 +100,7 @@ class DataProvider {
 
     // Which sun event the slot is showing, so a press opens the matching glance
     function isSunriseNext() as Boolean {
-        return mSun.nextIsSunrise;
+        return mSunriseNext;
     }
 
     private function temperature(settings as System.DeviceSettings) as String {
@@ -93,17 +109,27 @@ class DataProvider {
         }
         var conditions = Weather.getCurrentConditions();
         if (conditions == null || conditions.temperature == null) {
+            temperatureCelsius = null;
             return PLACEHOLDER;
         }
         var celsius = conditions.temperature as Numeric;
+        temperatureCelsius = celsius;
         var shown = settings.temperatureUnits == System.UNIT_STATUTE ? celsius * 9 / 5.0f + 32 : celsius;
         return Math.round(shown).toNumber().toString() + "°";
     }
 
     private function sunEvent(now as Time.Moment, settings as System.DeviceSettings) as String {
         mSun.update();
-        var eventTime = mSun.nextEventTime(now.value());
-        icons[FIELD_SUN_EVENT] = mSun.nextIsSunrise ? ICON_SUNRISE : ICON_SUNSET;
+        // Prefer the watch's own times so the slot matches its glance to the minute
+        var eventTime = nativeSunEvent(now);
+        if (eventTime == null) {
+            eventTime = mSun.nextEventTime(now.value());
+            mSunriseNext = mSun.nextIsSunrise;
+            logSunSource("SunCalc");
+        } else {
+            logSunSource("complication");
+        }
+        icons[FIELD_SUN_EVENT] = mSunriseNext ? ICON_SUNRISE : ICON_SUNSET;
         if (eventTime == null) {
             return PLACEHOLDER;
         }
@@ -116,6 +142,52 @@ class DataProvider {
             }
         }
         return hour.toString() + ":" + info.min.format("%02d");
+    }
+
+    // Next sun event from the watch's complications. Both are seconds since local midnight,
+    // so they are only today's times; after sunset the next sunrise is tomorrow's, which is
+    // today's plus a day (a minute or two out, and corrected once the day rolls over).
+    private function nativeSunEvent(now as Time.Moment) as Number? {
+        if (!mHasComplications) {
+            return null;
+        }
+        var midnight = Time.today().value();
+        var nowValue = now.value();
+        var rise = complicationSeconds(mSunriseId);
+        var set = complicationSeconds(mSunsetId);
+        if (rise != null && nowValue < midnight + rise) {
+            mSunriseNext = true;
+            return midnight + rise;
+        }
+        if (set != null && nowValue < midnight + set) {
+            mSunriseNext = false;
+            return midnight + set;
+        }
+        if (rise != null) {
+            mSunriseNext = true;
+            return midnight + 86400 + rise;
+        }
+        return null;
+    }
+
+    private function complicationSeconds(id as Complications.Id?) as Number? {
+        if (id == null) {
+            return null;
+        }
+        try {
+            var value = Complications.getComplication(id).value;
+            return value instanceof Lang.Number ? value : null;
+        } catch (e) {
+            // Not published on this watch, or no value yet
+            return null;
+        }
+    }
+
+    private function logSunSource(source as String) as Void {
+        if (!mLoggedSunSource) {
+            mLoggedSunSource = true;
+            System.println("Sun times from " + source);
+        }
     }
 
     private function heartRate(activity as Activity.Info?) as String {
