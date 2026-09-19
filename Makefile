@@ -35,6 +35,11 @@ install:
 	$(MAKE) build DEVICE=$(WATCH_DEVICE)
 	cp bin/$(WATCH_DEVICE).prg bin/$(APP_FILE).PRG
 	: > bin/$(APP_FILE).TXT
+	@# libmtp often reports "No devices" right after the watch is plugged in; a detect pass wakes it
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		mtp-detect 2>/dev/null | grep -q 'Found 1 device' && break; \
+		echo "waiting for the watch..."; sleep 3; \
+	done
 	-@mtp-connect --delete /GARMIN/Apps/$(APP_FILE).PRG 2>&1 | $(MTP_QUIET) >/dev/null
 	-@mtp-connect --delete /GARMIN/Apps/LOGS/$(APP_FILE).TXT 2>&1 | $(MTP_QUIET) >/dev/null
 	@out=$$(mtp-sendfile bin/$(APP_FILE).PRG /GARMIN/Apps 2>&1); echo "$$out" | $(MTP_QUIET); echo "$$out" | grep -q 'New file ID'

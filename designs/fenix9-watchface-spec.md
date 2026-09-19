@@ -65,9 +65,12 @@ not a preference.
   - Never draw it after `onEnterSleep`
   - The watch firmware decides how long it stays awake; the face cannot extend
     that. Measure the real awake window on the watch
-- Hand style: solid filled, thin tapered polygons, 3 to 4px at the base
-  narrowing to 2px. Not the hollow outline hands of the reference photo.
-  Hour hand ~55% of dial radius, minute hand ~80%
+- Hand style: thin tapered hands (about 6px at the base narrowing to 2px at
+  454px) with a thin white rim and a tinted inner body that fades in a subtle
+  sand-coloured gradient from hub to tip. Connect IQ has no gradient fill, so
+  the body is a few stepped polygon segments. Not the hollow outline hands of
+  the reference photo. Hour hand ~55% of dial radius with a darker body,
+  minute hand ~80%
 - Centre hub: small filled circle, ~6px radius
 - `dc.setAntiAlias(true)` where supported, checked once at init
 
@@ -269,7 +272,7 @@ recreated. Two APIs look like they might help and do not:
 
 Draw one small monochrome SVG per data type (white on transparent, 24x24
 viewBox) in `resources/drawables/icons/`. The resource compiler rasterises them
-with `scaleRelativeTo="screen"` (5.5% of the screen, about 25px at 454px), so
+with `scaleRelativeTo="screen"` (6.5% of the screen, about 30px at 454px), so
 icon size follows the screen with no per-resolution assets. Load all of them
 once at init.
 
@@ -375,7 +378,8 @@ Decided 2026-09-14:
   | Centre lower | Date |
 
 - **Accent colours:** tick bars and second hand red; the two upper centre
-  icons cyan; a dim colour on the hour hand. Everything else white. Ring order,
+  icons cyan; hour and minute hands have a sand-tinted gradient body inside a
+  white rim, the hour hand's darker. Everything else white. Ring order,
   battery in days, the pressure trend arrow and the cyan centre icons all follow
   `reference-concept.jpg`
 - **Units:** follow the watch's own settings via `System.getDeviceSettings()`,

@@ -16,9 +16,15 @@ class Layout {
 
     const HOUR_LENGTH = 0.55;
     const MINUTE_LENGTH = 0.80;
-    const HAND_BASE_WIDTH = 0.008;
-    const HAND_TIP_WIDTH = 0.0045;
+    const HAND_BASE_WIDTH = 0.020;
+    const HAND_TIP_WIDTH = 0.007;
     const HAND_OUTLINE = 0.0022;
+    // White rim around the tinted body, and where the body starts (fraction of hand length).
+    // Keep the rim thin: it eats into the body from both sides, and a wide rim makes the hand
+    // read as a hollow outline.
+    const HAND_RIM = 0.0022;
+    const HAND_BODY_START = 0.10;
+    const HAND_BODY_SEGMENTS = 8;
 
     const SECOND_LENGTH = 0.88;
     const SECOND_TIP_LENGTH = 0.08;
@@ -29,20 +35,23 @@ class Layout {
     // Ring slots span 1 o'clock to 11 o'clock, leaving 12 clear
     const SLOT_FIRST_ANGLE = 30.0f;
     const SLOT_LAST_ANGLE = 330.0f;
-    const SLOT_GAP = 0.012;
-    const RING_FONT_SIZE = 0.056;
+    const SLOT_GAP = 0.014;
+    // Ring text has to fit between two ticks: at 60 degrees apart on the ring radius that is
+    // about 175px of arc at 454px, and the longest values ("20:07") take ~150px with their icon.
+    const RING_FONT_SIZE = 0.088;
 
-    const CENTRE_LEFT_X = 0.38;
-    const CENTRE_RIGHT_X = 0.62;
-    const CENTRE_LABEL_Y = 0.28;
+    // Centre columns sit wide enough that the bigger values clear the divider
+    const CENTRE_LEFT_X = 0.34;
+    const CENTRE_RIGHT_X = 0.66;
+    const CENTRE_LABEL_Y = 0.25;
     const CENTRE_VALUE_Y = 0.35;
-    const CENTRE_LABEL_FONT_SIZE = 0.046;
-    const CENTRE_VALUE_FONT_SIZE = 0.062;
-    const DIVIDER_TOP = 0.24;
-    const DIVIDER_BOTTOM = 0.39;
+    const CENTRE_LABEL_FONT_SIZE = 0.060;
+    const CENTRE_VALUE_FONT_SIZE = 0.100;
+    const DIVIDER_TOP = 0.22;
+    const DIVIDER_BOTTOM = 0.40;
     const DIVIDER_WIDTH = 0.004;
     const DATE_Y = 0.70;
-    const DATE_FONT_SIZE = 0.074;
+    const DATE_FONT_SIZE = 0.105;
 
     const FONT_FACES = ["RobotoCondensedBold", "RobotoRegular"] as Array<String>;
 
@@ -54,12 +63,15 @@ class Layout {
     // Tick bars, already in screen coordinates
     var ticks as Array<Array<Point2D>>;
 
-    // Hand shapes pointing at 12 o'clock, relative to the centre.
-    // Each outline shape is the hand grown by the outline width, filled black underneath.
-    var hourShape as Array<Point2D>;
+    // Hand shapes pointing at 12 o'clock, relative to the centre: a black outline (the hand grown
+    // by the outline width), the white rim shape, and the tinted body split into segments so it
+    // can be drawn as a stepped gradient from hub to tip.
     var hourOutline as Array<Point2D>;
-    var minuteShape as Array<Point2D>;
+    var hourShape as Array<Point2D>;
+    var hourBody as Array<Array<Point2D>>;
     var minuteOutline as Array<Point2D>;
+    var minuteShape as Array<Point2D>;
+    var minuteBody as Array<Array<Point2D>>;
 
     var secondLength as Float;
     var secondTipStart as Float;
@@ -102,16 +114,16 @@ class Layout {
             ticks.add(tick);
         }
 
-        var outline = size * HAND_OUTLINE;
-        if (outline < 1.0f) {
-            outline = 1.0f;
-        }
+        var outline = atLeastFloat(size * HAND_OUTLINE, 1.0f);
+        var rim = atLeastFloat(size * HAND_RIM, 1.0f);
         var base = size * HAND_BASE_WIDTH;
         var tip = size * HAND_TIP_WIDTH;
-        hourShape = taperedHand(radius * HOUR_LENGTH, base, tip, 0.0f);
         hourOutline = taperedHand(radius * HOUR_LENGTH, base, tip, outline);
-        minuteShape = taperedHand(radius * MINUTE_LENGTH, base, tip, 0.0f);
+        hourShape = taperedHand(radius * HOUR_LENGTH, base, tip, 0.0f);
+        hourBody = handBody(radius * HOUR_LENGTH, base, tip, rim);
         minuteOutline = taperedHand(radius * MINUTE_LENGTH, base, tip, outline);
+        minuteShape = taperedHand(radius * MINUTE_LENGTH, base, tip, 0.0f);
+        minuteBody = handBody(radius * MINUTE_LENGTH, base, tip, rim);
 
         secondLength = radius * SECOND_LENGTH;
         secondTipStart = radius * (SECOND_LENGTH - SECOND_TIP_LENGTH);
@@ -148,11 +160,39 @@ class Layout {
         return [[-b, grow], [-t, -length - grow], [t, -length - grow], [b, grow]] as Array<Point2D>;
     }
 
+    // The hand inset by the rim, from HAND_BODY_START to just short of the tip, cut into segments.
+    // Segments overlap by half a pixel so anti-aliasing leaves no seams between them.
+    private function handBody(length as Float, baseWidth as Float, tipWidth as Float, rim as Float) as Array<Array<Point2D>> {
+        var segments = [] as Array<Array<Point2D>>;
+        var start = length * HAND_BODY_START;
+        var end = length - rim * 2;
+        for (var i = 0; i < HAND_BODY_SEGMENTS; i++) {
+            var near = start + (end - start) * i / HAND_BODY_SEGMENTS;
+            var far = start + (end - start) * (i + 1) / HAND_BODY_SEGMENTS;
+            if (i < HAND_BODY_SEGMENTS - 1) {
+                far += 0.5f;
+            }
+            var nearHalf = bodyHalfWidth(near, length, baseWidth, tipWidth, rim);
+            var farHalf = bodyHalfWidth(far, length, baseWidth, tipWidth, rim);
+            segments.add([[-nearHalf, -near], [-farHalf, -far], [farHalf, -far], [nearHalf, -near]] as Array<Point2D>);
+        }
+        return segments;
+    }
+
+    private function bodyHalfWidth(distance as Float, length as Float, baseWidth as Float, tipWidth as Float, rim as Float) as Float {
+        var half = (baseWidth + (tipWidth - baseWidth) * distance / length) / 2 - rim;
+        return atLeastFloat(half, 0.0f);
+    }
+
     private function vectorFont(pixels as Float) as VectorFont? {
         return Graphics.getVectorFont({ :face => FONT_FACES, :size => (pixels + 0.5f).toNumber() });
     }
 
     private function atLeast(value as Number, minimum as Number) as Number {
+        return value < minimum ? minimum : value;
+    }
+
+    private function atLeastFloat(value as Float, minimum as Float) as Float {
         return value < minimum ? minimum : value;
     }
 

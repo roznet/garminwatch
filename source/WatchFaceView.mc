@@ -9,8 +9,12 @@ module Colors {
     const CENTRE_ACCENT = 0x22CCDD;
     const TEXT = 0xFFFFFF;
     const DIVIDER = 0xAAAAAA;
-    const HOUR_HAND = 0xAAAAAA;
-    const MINUTE_HAND = 0xFFFFFF;
+    const HAND_RIM = 0xFFFFFF;
+    // Sand-tinted hand bodies, fading from the hub (NEAR) to the tip (FAR); the hour hand is darker
+    const HOUR_BODY_NEAR = 0x8C7048;
+    const HOUR_BODY_FAR = 0xD8BC8C;
+    const MINUTE_BODY_NEAR = 0xA88554;
+    const MINUTE_BODY_FAR = 0xF2E0BC;
     const SECOND_HAND = 0xFF2020;
     const SECOND_TIP = 0xFFFFFF;
     const HUB = 0xAAAAAA;
@@ -33,14 +37,20 @@ class WatchFaceView extends WatchUi.WatchFace {
     private var mIcons as Array<BitmapResource?>;
 
     // Reused every draw so onUpdate does not allocate polygons or transforms
-    private var mHourPts as Array<Point2D>;
     private var mHourOutlinePts as Array<Point2D>;
-    private var mMinutePts as Array<Point2D>;
+    private var mHourPts as Array<Point2D>;
+    private var mHourBodyPts as Array<Array<Point2D>>;
     private var mMinuteOutlinePts as Array<Point2D>;
+    private var mMinutePts as Array<Point2D>;
+    private var mMinuteBodyPts as Array<Array<Point2D>>;
     private var mTransform as AffineTransform;
     private var mMatrix as [Float, Float, Float, Float, Float, Float];
     private var mIconOptions as { :transform as AffineTransform, :filterMode as FilterMode };
     private var mTintedIconOptions as { :transform as AffineTransform, :filterMode as FilterMode, :tintColor as ColorType };
+
+    // One colour per body segment, hub to tip
+    private var mHourBodyColors as Array<Number>;
+    private var mMinuteBodyColors as Array<Number>;
 
     function initialize() {
         WatchFace.initialize();
@@ -48,10 +58,14 @@ class WatchFaceView extends WatchUi.WatchFace {
         mWakeTimer = System.getTimer();
         mData = new DataProvider();
         mIcons = new [ICON_COUNT] as Array<BitmapResource?>;
-        mHourPts = newPolygon(4);
         mHourOutlinePts = newPolygon(4);
-        mMinutePts = newPolygon(4);
+        mHourPts = newPolygon(4);
+        mHourBodyPts = [] as Array<Array<Point2D>>;
         mMinuteOutlinePts = newPolygon(4);
+        mMinutePts = newPolygon(4);
+        mMinuteBodyPts = [] as Array<Array<Point2D>>;
+        mHourBodyColors = [] as Array<Number>;
+        mMinuteBodyColors = [] as Array<Number>;
         mTransform = new Graphics.AffineTransform();
         mMatrix = [1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f];
         mIconOptions = { :transform => mTransform, :filterMode => Graphics.FILTER_MODE_BILINEAR };
@@ -59,7 +73,13 @@ class WatchFaceView extends WatchUi.WatchFace {
     }
 
     function onLayout(dc as Dc) as Void {
-        mGeometry = new Layout(dc.getWidth(), dc.getHeight());
+        var layout = new Layout(dc.getWidth(), dc.getHeight());
+        mGeometry = layout;
+        mHourBodyPts = newPolygons(layout.hourBody.size());
+        mMinuteBodyPts = newPolygons(layout.minuteBody.size());
+        mHourBodyColors = gradient(Colors.HOUR_BODY_NEAR, Colors.HOUR_BODY_FAR, layout.hourBody.size());
+        mMinuteBodyColors = gradient(Colors.MINUTE_BODY_NEAR, Colors.MINUTE_BODY_FAR, layout.minuteBody.size());
+
         var ids = [
             Rez.Drawables.IconThermometer,
             Rez.Drawables.IconSunrise,
@@ -104,8 +124,10 @@ class WatchFaceView extends WatchUi.WatchFace {
         var hourAngle = (((clock.hour % 12) + minutes / 60.0f) * Math.PI / 6).toFloat();
         var minuteAngle = (minutes * Math.PI / 30).toFloat();
 
-        drawHand(dc, layout, layout.hourOutline, mHourOutlinePts, layout.hourShape, mHourPts, hourAngle, Colors.HOUR_HAND);
-        drawHand(dc, layout, layout.minuteOutline, mMinuteOutlinePts, layout.minuteShape, mMinutePts, minuteAngle, Colors.MINUTE_HAND);
+        drawHand(dc, layout, layout.hourOutline, mHourOutlinePts, layout.hourShape, mHourPts,
+            layout.hourBody, mHourBodyPts, mHourBodyColors, hourAngle);
+        drawHand(dc, layout, layout.minuteOutline, mMinuteOutlinePts, layout.minuteShape, mMinutePts,
+            layout.minuteBody, mMinuteBodyPts, mMinuteBodyColors, minuteAngle);
 
         if (mAwake && System.getTimer() - mWakeTimer < SECOND_HAND_DURATION_MS) {
             drawSecondHand(dc, layout, (clock.sec * Math.PI / 30).toFloat());
@@ -235,15 +257,22 @@ class WatchFaceView extends WatchUi.WatchFace {
         dc.drawBitmap2(x, y, icon, tinted ? mTintedIconOptions : mIconOptions);
     }
 
-    // Black outline polygon first, hand on top, so the hand stays legible over text
+    // Black outline first so the hand stays legible over text, then the white rim shape,
+    // then the tinted body segments on top as a stepped gradient from hub to tip
     private function drawHand(dc as Dc, layout as Layout, outline as Array<Point2D>, outlinePts as Array<Point2D>,
-            shape as Array<Point2D>, shapePts as Array<Point2D>, angle as Float, color as Number) as Void {
+            shape as Array<Point2D>, shapePts as Array<Point2D>, body as Array<Array<Point2D>>,
+            bodyPts as Array<Array<Point2D>>, bodyColors as Array<Number>, angle as Float) as Void {
         rotatePoints(outline, outlinePts, angle, layout.cx, layout.cy);
         rotatePoints(shape, shapePts, angle, layout.cx, layout.cy);
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
         dc.fillPolygon(outlinePts);
-        dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+        dc.setColor(Colors.HAND_RIM, Graphics.COLOR_TRANSPARENT);
         dc.fillPolygon(shapePts);
+        for (var i = 0; i < body.size(); i++) {
+            rotatePoints(body[i], bodyPts[i], angle, layout.cx, layout.cy);
+            dc.setColor(bodyColors[i], Graphics.COLOR_TRANSPARENT);
+            dc.fillPolygon(bodyPts[i]);
+        }
     }
 
     private function drawSecondHand(dc as Dc, layout as Layout, angle as Float) as Void {
@@ -255,6 +284,30 @@ class WatchFaceView extends WatchUi.WatchFace {
         dc.setColor(Colors.SECOND_TIP, Graphics.COLOR_TRANSPARENT);
         dc.drawLine(layout.cx + dx * layout.secondTipStart, layout.cy + dy * layout.secondTipStart,
             layout.cx + dx * layout.secondLength, layout.cy + dy * layout.secondLength);
+    }
+
+    private function newPolygons(count as Number) as Array<Array<Point2D>> {
+        var polygons = new [count] as Array<Array<Point2D>>;
+        for (var i = 0; i < count; i++) {
+            polygons[i] = newPolygon(4);
+        }
+        return polygons;
+    }
+
+    // Linear blend between two RGB colours, one entry per step
+    private function gradient(near as Number, far as Number, steps as Number) as Array<Number> {
+        var colors = new [steps] as Array<Number>;
+        for (var i = 0; i < steps; i++) {
+            var t = steps > 1 ? i.toFloat() / (steps - 1) : 0.0f;
+            colors[i] = blendChannel(near, far, 16, t) | blendChannel(near, far, 8, t) | blendChannel(near, far, 0, t);
+        }
+        return colors;
+    }
+
+    private function blendChannel(near as Number, far as Number, shift as Number, t as Float) as Number {
+        var a = (near >> shift) & 0xFF;
+        var b = (far >> shift) & 0xFF;
+        return (a + (b - a) * t + 0.5f).toNumber() << shift;
     }
 
 }
