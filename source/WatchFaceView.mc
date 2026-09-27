@@ -18,7 +18,11 @@ module Colors {
     const ICON_HEART = 0xE03A3A;
     const ICON_MOUNTAIN = 0xA9764B;
     const ICON_STEPS = 0x7FC46A;
-    const ICON_BATTERY = 0xBFC6CE;
+    // Battery icon by charge: green above 50%, neutral to 20%, then amber, red at 10% and below
+    const BATTERY_HIGH = 0x7FC46A;
+    const BATTERY_MID = 0xBFC6CE;
+    const BATTERY_LOW = 0xE8A33A;
+    const BATTERY_CRITICAL = 0xE03A3A;
     const DIVIDER = 0xAAAAAA;
     const HAND_RIM = 0xFFFFFF;
     // Sand-tinted hand bodies, fading from the hub (NEAR) to the tip (FAR); the hour hand is darker
@@ -100,7 +104,11 @@ class WatchFaceView extends WatchUi.WatchFace {
             Colors.ICON_HEART,
             Colors.ICON_MOUNTAIN,
             Colors.ICON_STEPS,
-            Colors.ICON_BATTERY,
+            Colors.BATTERY_MID,
+            Colors.BATTERY_MID,
+            Colors.BATTERY_MID,
+            Colors.BATTERY_MID,
+            Colors.BATTERY_MID,
             Colors.CENTRE_ACCENT
         ] as Array<Number>;
     }
@@ -120,7 +128,11 @@ class WatchFaceView extends WatchUi.WatchFace {
             Rez.Drawables.IconHeart,
             Rez.Drawables.IconMountain,
             Rez.Drawables.IconSteps,
-            Rez.Drawables.IconBattery,
+            Rez.Drawables.IconBattery0,
+            Rez.Drawables.IconBattery25,
+            Rez.Drawables.IconBattery50,
+            Rez.Drawables.IconBattery75,
+            Rez.Drawables.IconBattery100,
             Rez.Drawables.IconTrend
         ];
         for (var i = 0; i < ids.size(); i++) {
@@ -339,8 +351,24 @@ class WatchFaceView extends WatchUi.WatchFace {
                 return temperatureColor(celsius);
             }
         }
+        if (field == FIELD_BATTERY_DAYS) {
+            var percent = mData.batteryPercent;
+            if (percent != null) {
+                return batteryColor(percent);
+            }
+        }
         var id = mData.icons[field];
         return id == ICON_NONE ? Colors.ICON_DEFAULT : mIconColors[id];
+    }
+
+    private function batteryColor(percent as Numeric) as Number {
+        if (percent <= 10) {
+            return Colors.BATTERY_CRITICAL;
+        }
+        if (percent <= 20) {
+            return Colors.BATTERY_LOW;
+        }
+        return percent > 50 ? Colors.BATTERY_HIGH : Colors.BATTERY_MID;
     }
 
     // Cold blue through to hot red, the ramp weather services use, without the green mid band

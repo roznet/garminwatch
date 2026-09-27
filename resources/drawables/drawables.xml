@@ -10,6 +10,11 @@
     <bitmap id="IconHeart" filename="icons/heart.svg" scaleX="8%" scaleY="8%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
     <bitmap id="IconMountain" filename="icons/mountain.svg" scaleX="8%" scaleY="8%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
     <bitmap id="IconSteps" filename="icons/steps.svg" scaleX="8%" scaleY="8%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
-    <bitmap id="IconBattery" filename="icons/battery.svg" scaleX="8%" scaleY="8%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
+    <!-- Battery at five charge levels; DataProvider picks the nearest -->
+    <bitmap id="IconBattery0" filename="icons/battery_0.svg" scaleX="8%" scaleY="8%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
+    <bitmap id="IconBattery25" filename="icons/battery_25.svg" scaleX="8%" scaleY="8%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
+    <bitmap id="IconBattery50" filename="icons/battery_50.svg" scaleX="8%" scaleY="8%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
+    <bitmap id="IconBattery75" filename="icons/battery_75.svg" scaleX="8%" scaleY="8%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
+    <bitmap id="IconBattery100" filename="icons/battery_100.svg" scaleX="8%" scaleY="8%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
     <bitmap id="IconTrend" filename="icons/trend.svg" scaleX="8%" scaleY="8%" scaleRelativeTo="screen" automaticPalette="false" dithering="none" />
 </drawables>

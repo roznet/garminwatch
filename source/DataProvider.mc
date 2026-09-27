@@ -29,6 +29,9 @@ class DataProvider {
     // Always Celsius whatever the display unit, so the icon colour scale has one input
     var temperatureCelsius as Numeric? = null;
 
+    // Charge in percent, for the battery icon's fill and colour
+    var batteryPercent as Numeric? = null;
+
     private var mSun as SunCalc;
     private var mLastMinute as Number = -1;
     private var mLastRefresh as Number = 0;
@@ -63,7 +66,7 @@ class DataProvider {
             values[i] = PLACEHOLDER;
             iconRotations[i] = 0.0f;
         }
-        icons = [ICON_THERMOMETER, ICON_SUNRISE, ICON_HEART, ICON_MOUNTAIN, ICON_STEPS, ICON_BATTERY,
+        icons = [ICON_THERMOMETER, ICON_SUNRISE, ICON_HEART, ICON_MOUNTAIN, ICON_STEPS, ICON_BATTERY_100,
             ICON_NONE, ICON_NONE, ICON_NONE] as Array<Number>;
         labels[FIELD_UTC_TIME] = "UTC";
     }
@@ -215,8 +218,14 @@ class DataProvider {
         return count == null ? PLACEHOLDER : count.toString();
     }
 
+    // Reads the charge the firmware already tracks, piggybacking on the minute refresh:
+    // no sensor is woken. The icon steps in quarters, the nearest level to the charge.
     private function batteryDays() as String {
-        return System.getSystemStats().batteryInDays.toNumber().toString() + "d";
+        var stats = System.getSystemStats();
+        var percent = stats.battery;
+        batteryPercent = percent;
+        icons[FIELD_BATTERY_DAYS] = ICON_BATTERY_0 + Math.round(percent / 25.0f).toNumber();
+        return stats.batteryInDays.toNumber().toString() + "d";
     }
 
     private function utcTime(now as Time.Moment) as String {

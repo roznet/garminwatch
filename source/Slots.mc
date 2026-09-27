@@ -24,7 +24,12 @@ enum IconId {
     ICON_HEART,
     ICON_MOUNTAIN,
     ICON_STEPS,
-    ICON_BATTERY,
+    // Five charge levels, empty to full, kept consecutive so a level indexes from ICON_BATTERY_0
+    ICON_BATTERY_0,
+    ICON_BATTERY_25,
+    ICON_BATTERY_50,
+    ICON_BATTERY_75,
+    ICON_BATTERY_100,
     ICON_TREND,
     ICON_COUNT
 }
